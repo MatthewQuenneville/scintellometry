@@ -1,0 +1,27 @@
+- write header as in header(all components); return header
+- at least for gmrt have both pols and channels in one thread (2bit complex?)
+- think about vdif setup for different telescopes, e.g. dada is also 8bit complex
+- the lofar issue about not being able to fill up one second
+
+===========
+DATA FORMATS
+===========
+
+MWA: 8bit complex (16bit per sample), 24 streams, single thread, 128 chans * 2pols, 
+     dt = 100 mus, dnu = 10kHz, samplerate = 0.1 MHz, 2pols
+     - have multiple files?
+
+GMRT: 4bit complex, 16MHz BW, 256/512 chans * 2pol, samplerate = 200./6. MHZ
+      dt = 30 ns, 1pol?, 
+      - how to get both streams into one file?
+
+JB_DADA: 8bit complex, 2pols, 16 MHz BW, dt = 0.062500 mus, samplerate = 16 MHz, one chan
+	 - wanna channelize it?
+
+============
+File Pointer
+============
+1) How to get the bit of data we want (specific times)
+   a) store file position of header with each time in memory (might get large)
+   b) seek through entire file to get relevant file positions, append data each time?
+   c) 
