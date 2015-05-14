@@ -292,6 +292,7 @@ VDIF_header = {
                  ('seconds', (0, 0, 30)),
                  ('ref_epoch', (1, 24, 6)),
                  ('frame_nr', (1, 0, 24)),
+                 ('_2_30_2', (2, 30, 2)),
                  ('vdif_version', (2, 29, 3)),
                  ('lg2_nchan', (2, 24, 5)),
                  ('frame_length', (2, 0, 24)),
@@ -304,11 +305,12 @@ VDIF_header = {
         ('sample_rate', (4, 0, 23)),
         ('sync_pattern', (5, 0, 32)),
         ('das_id', (6, 0, 32)),
-        ('ua', (7, 0, 32))),
+        ('_7_0_32', (7, 0, 32))),
     3: (('sampling_unit', (4, 23, 1)),
         ('sample_rate', (4, 0, 23)),
         ('sync_pattern', (5, 0, 32)),
         ('loif_tuning', (6, 0, 32)),
+        ('_7_28_4', (7, 28, 4)),
         ('dbe_unit', (7, 24, 4)),
         ('if_nr', (7, 20, 4)),
         ('subband', (7, 17, 3)),
@@ -334,7 +336,8 @@ for vk, vv in VDIF_header.items():
 ref_max = int(2. * (Time.now().jyear - 2000.)) + 1
 ref_epochs = Time(['{y:04d}-{m:02d}-01'.format(y=2000 + ref // 2,
                                                m=1 if ref % 2 == 0 else 7)
-                   for ref in range(ref_max)], format='isot', scale='utc')
+                   for ref in range(ref_max)], format='isot', scale='utc',
+                  precision=9)
 
 
 class VDIFFrameHeader(object):
@@ -372,6 +375,12 @@ class VDIFFrameHeader(object):
             else:
                 return cls(four_word_struct.unpack(s), False, verify)
 
+    def tobytes(self):
+        if len(self.data) == 8:
+            return eight_word_struct.pack(self.data)
+        else:
+            return four_word_struct.pack(self.data)
+
     @classmethod
     def fromfile(cls, fh, edv=None, verify=True):
         """Read VDIF Header from file."""
@@ -388,6 +397,111 @@ class VDIFFrameHeader(object):
             self.verify()
 
         return self
+
+    @classmethod
+    def fromvalues(cls, **kwargs):
+        """Initialise a header from parsed values.
+
+        Here, the parsed values must be given as keyword arguments, i.e.,
+        for any header = cls(<somedata), cls.fromvalues(**header) == header.
+
+        However, defaults are defined for some keywords or can be inferred from
+        other keyword arguments (which generally have the name of methods).
+
+        Given defaults:
+
+        invalid_data : `False`
+        legacy_mode : `False`
+        vdif_version : 1
+
+        Defaults inferred from other keyword arguments (if present):
+
+        bits_per_sample : from 'bps'
+        frame_length : from 'payloadsize' (and 'legacy_mode')
+        lg2_nchan : from 'nchan'
+        station_id : from 'station'
+        sample_rate, sample_unit : from 'bandwidth'
+        ref_epoch, seconds : from 'time'
+        frame_nr : from 'time' (or 'seconds'), 'bps', 'chan', and 'bandwidth'
+        """
+        kwargs.setdefault('legacy_mode', False)
+        kwargs.setdefault('invalid_data', False)
+        kwargs.setdefault('vdif_version', 1)
+
+        bps = kwargs.pop('bps', None)
+        if bps is not None:
+            kwargs.setdefault('bits_per_sample',
+                              bps // (2 if kwargs['complex_data'] else 1) - 1)
+
+        payloadsize = kwargs.pop('payloadsize', None)
+        if payloadsize is not None:
+            headersize = 16 if kwargs['legacy_mode'] else 32
+            kwargs.setdefault('frame_length', (payloadsize - headersize) // 8)
+
+        nchan = kwargs.pop('nchan', None)
+        if nchan is not None:
+            assert np.log2(nchan) % 1 == 0
+            kwargs.setdefault('lg2_nchan', int(np.log2(nchan)))
+
+        station = kwargs.pop('station', None)
+        if station is not None:
+            try:
+                station_id = ord(station[0]) << 8 + ord(station[1])
+            except TypeError:
+                station_id = station
+            assert int(station_id) == station_id
+            kwargs.setdefault('station_id', station_id)
+
+        bandwidth = kwargs.pop('bandwidth', None)
+        if bandwidth is not None:
+            if bandwidth.unit == u.kHz or bandwidth.to(u.MHz).value % 1 != 0:
+                assert bandwidth.to(u.kHz).value % 1 == 0
+                kwargs.setdefault('sample_rate', bandwidth.to(u.kHz).value)
+                kwargs.setdefault('sampling_unit', False)
+            else:
+                kwargs.setdefault('sample_rate', bandwidth.to(u.MHz).value)
+                kwargs.setdefault('sampling_unit', True)
+
+        time = kwargs.pop('time', None)
+        if time is not None:
+            assert time > ref_epochs[0]
+            if time > ref_epochs[-1]:
+                ref_index = len(ref_epochs) - 1
+            else:
+                ref_index = np.searchsorted((ref_epochs - time < 0).sec)
+            kwargs.setdefault('ref_epoch', ref_index)
+
+            kwargs.setdefault('seconds',
+                              (time - ref_epochs[kwargs['ref_epoch']]).sec)
+
+        # too lazy to convert sample_rate, etc.
+        if(bandwidth is not None and payloadsize is not None and
+           bps is not None):
+            int_sec, frac_sec = divmod(kwargs['seconds'], 1)
+            kwargs.setdefault('frame_nr', frac_sec /
+                              (payloadsize // 4 * (32 // bps) /
+                               bandwidth.to(u.Hz).value))
+            kwargs['seconds'] = int(int_sec)
+
+        # Now should have everything set up for constructing the binary data.
+        # Get all required values.
+        headers = VDIF_header['standard']
+        if kwargs['legacy_mode']:
+            words = [0] * 4
+            # effectively, remove 'edv' from headers, which is in word4.
+            headers = tuple((k, v) for (k, v) in headers if v[0] < 4)
+        else:
+            words = [0] * 8
+            headers += VDIF_header[kwargs['edv']]
+
+        for k, v in headers:
+            # Any unassigned items we skip if not given.
+            if k.startswith('_') and k not in kwargs:
+                continue
+            assert k in kwargs and kwargs[k] & ((1 << v[2]) - 1) == kwargs[k]
+            words[v[0]] |= int(kwargs[k]) << v[1]
+
+        return cls(words)
 
     def __getitem__(self, item):
         try:
@@ -412,6 +526,10 @@ class VDIFFrameHeader(object):
         if self.edv:
             for item in VDIF_header[self.edv]:
                 yield item[0]
+
+    def __eq__(self, other):
+        return (type(self) is type(other) and
+                list(self.data) == list(other.data))
 
     def __contains__(self, key):
         return key in self.keys()
