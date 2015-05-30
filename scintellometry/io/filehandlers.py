@@ -5,10 +5,11 @@ ARO, LOFAR, and GMRT data in the respective modules."""
 
 from __future__ import division
 
-import numpy as np
 import os
 import warnings
+import io
 
+import numpy as np
 from astropy import units as u
 from astropy.time import Time
 from .fromfile import fromfile
@@ -35,7 +36,7 @@ header_defaults = {}
 class MultiFile(psrFITS):
 
     def __init__(self, files=None, blocksize=None, dtype=None, nchan=None,
-                 comm=None):
+                 open_raw=io.open, comm=None):
         if comm is None:
             try:
                 self.comm = MPI.COMM_SELF
@@ -43,6 +44,7 @@ class MultiFile(psrFITS):
                 self.comm = None
         else:
             self.comm = comm
+        self._open_raw = open_raw
         # parameters for fold:
         if blocksize is not None:
             self.blocksize = blocksize
@@ -66,7 +68,7 @@ class MultiFile(psrFITS):
             self[hdu].header.update(dictionary[hdu])
 
     def open(self, files):
-        self.fh_raw = [open(raw, 'rb') for raw in files]
+        self.fh_raw = [self._open_raw(raw, 'rb') for raw in files]
         self.offset = 0
 
     def close(self):
@@ -247,7 +249,7 @@ class SequentialFile(MultiFile):
         """
         if number != self.current_file_number:
             self.close()
-            self.fh_raw = open(self.files[number], mode='rb')
+            self.fh_raw = self._open_raw(self.files[number], mode='rb')
             self.current_file_number = number
         return self.fh_raw
 
