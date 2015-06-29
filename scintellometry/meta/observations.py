@@ -162,7 +162,10 @@ class Observation(dict):
             if k == 'ppol' and v.startswith('Polynomial'):
                 self[k] = eval(v)
             elif k in ('P', 'S', 'channels', 'nodes'):
-                self[k] = [int(_v) for _v in v]
+                if isinstance(v, list):
+                    self[k] = [int(_v) for _v in v]
+                else:
+                    self[k] = [int(v)]
             elif k == 'setup':
                 self[k] = parse_setup(v)
             else:
@@ -245,7 +248,10 @@ def parse_telescope(name, vals):
             val = Observation(date, val)
         except ValueError:
             if key in ('P', 'S', 'channels', 'nodes'):
-                val = [int(v) for v in val]
+                if isinstance(val, list):
+                    val = [int(_v) for _v in val]
+                else:
+                    val = [int(val)]
             elif key == 'setup':
                 val = parse_setup(val)
         tel[key] = val
@@ -284,8 +290,11 @@ def parse_pulsars(psrs):
 
 def parse_setup(setup):
     for k, v in setup.iteritems():
-        if k in ('P', 'S', 'channels', 'nodes'):
-            setup[k] = [int(_v) for _v in v]
+        if k in ('P', 'S', 'channels', 'nodes', 'sample_offsets'):
+            if isinstance(v, list):
+                setup[k] = [int(_v) for _v in v]
+            else:
+                setup[k] = [int(v)]
         else:
             setup[k] = eval(v)
     return setup

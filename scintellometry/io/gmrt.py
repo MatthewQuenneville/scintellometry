@@ -74,7 +74,8 @@ class GMRTRawDumpData(GMRTBase):
 
     def __init__(self, timestamp_file, raw_files, blocksize, nchan=1,
                  samplerate=(200./6.)*u.MHz, fedge=None, fedge_at_top=None,
-                 dtype='4bit', utc_offset=5.5*u.hr, comm=None):
+                 sample_offsets=None, dtype='4bit', utc_offset=5.5*u.hr,
+                 comm=None):
         """GMRT raw dump data stored in blocks holding 0.251 s worth of data,
         in a single streams.  For 16MHz BW, each block is 4 MiB w/ 8Mi 4-bit
         baseband samples.
@@ -83,6 +84,10 @@ class GMRTRawDumpData(GMRTBase):
         self.timestamps = read_timestamp_file_rawdump(timestamp_file,
                                                       utc_offset)
         self.time0 = self.timestamps[0]
+        if sample_offsets is None:
+            self.sample_offsets = (0,) * len(raw_files)
+        else:
+            self.sample_offsets = sample_offsets
         self.nchan = 1
         self.npol = len(raw_files)
         # GMRT time is off by one 32MB record ---- remove for now
@@ -101,8 +106,8 @@ class GMRTRawDumpData(GMRTBase):
             raise EOFError('At end of file in MultiFile.read')
 
         # actual seeks in files
-        for fh_raw in self.fh_raw:
-            fh_raw.seek(offset)
+        for fh_raw, sample_offset in zip(self.fh_raw, self.sample_offsets):
+            fh_raw.seek(offset + sample_offset)
 
         self.offset = offset
 
@@ -125,16 +130,21 @@ class GMRTRawDumpData(GMRTBase):
         z = np.empty((self.npol, size), dtype=np.int8)
 
         # read one or more pieces.
-        iz = 0
-        while(iz < size):
-            block, already_read = divmod(self.offset, self.blocksize)
-            fh_size = min(size - iz, self.blocksize - already_read)
-            for ipol, fh_raw in enumerate(self.fh_raw):
-                z[ipol, iz:iz+fh_size] = np.fromstring(fh_raw.read(fh_size),
-                                                       dtype=z.dtype)
+        for zpol, fh_raw, sample_offset in zip(z, self.fh_raw,
+                                               self.sample_offsets):
+            iz = 0
+            offset = self.offset
+            while(iz < size):
+                block, already_read = divmod(offset + sample_offset,
+                                             self.blocksize)
+                fh_size = min(size - iz, self.blocksize - already_read)
+                zpol[iz:iz+fh_size] = np.fromstring(fh_raw.read(fh_size),
+                                                    dtype=zpol.dtype)
 
-            self.offset += fh_size
-            iz += fh_size
+                offset += fh_size
+                iz += fh_size
+
+        self.offset += size
 
         return z.T  # Ensure output has shape (size, npol)
 
