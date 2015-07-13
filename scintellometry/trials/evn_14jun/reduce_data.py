@@ -4,7 +4,7 @@ from __future__ import division, print_function
 import numpy as np
 import astropy.units as u
 
-from reduction import reduce, CL_parser
+from scintellometry.meta.reduction import reduce, CL_parser
 
 MAX_RMS = 4.
 _fref = 325. * u.MHz  # ref. freq. for dispersion measure
