@@ -290,11 +290,16 @@ def parse_pulsars(psrs):
 
 def parse_setup(setup):
     for k, v in setup.iteritems():
-        if k in ('P', 'S', 'channels', 'nodes', 'sample_offsets'):
+        if k in ('P', 'S', 'channels', 'nodes'):
             if isinstance(v, list):
                 setup[k] = [int(_v) for _v in v]
             else:
                 setup[k] = [int(v)]
+        elif k == 'sample_offsets':
+            if isinstance(v, list):
+                setup[k] = [eval(_v) for _v in v]
+            else:
+                setup[k] = [eval(v)]
         else:
             setup[k] = eval(v)
     return setup

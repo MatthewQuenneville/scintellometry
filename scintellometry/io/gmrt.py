@@ -84,10 +84,6 @@ class GMRTRawDumpData(GMRTBase):
         self.timestamps = read_timestamp_file_rawdump(timestamp_file,
                                                       utc_offset)
         self.time0 = self.timestamps[0]
-        if sample_offsets is None:
-            self.sample_offsets = (0,) * len(raw_files)
-        else:
-            self.sample_offsets = sample_offsets
         self.nchan = 1
         self.npol = len(raw_files)
         # GMRT time is off by one 32MB record ---- remove for now
@@ -95,6 +91,19 @@ class GMRTRawDumpData(GMRTBase):
         super(GMRTRawDumpData, self).__init__(raw_files, blocksize, nchan,
                                               samplerate, fedge, fedge_at_top,
                                               dtype, comm)
+        if sample_offsets is None:
+            self.sample_offsets = (0,) * len(raw_files)
+        else:
+            self.sample_offsets = []
+            self.cable_delays = []
+            for sample_offset in sample_offsets:
+                if not hasattr(sample_offset, 'unit'):
+                    sample_offset = self.tell(sample_offset, u.s)
+
+                one_byte = self.tell(1, u.s)
+                offset, delay = divmod(sample_offset, one_byte)
+                self.sample_offsets.append(int(offset))
+                self.cable_delays.append(delay)
 
     def _seek(self, offset):
         if offset % self.recordsize != 0:

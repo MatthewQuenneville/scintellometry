@@ -192,11 +192,14 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
         # Lorimer & Kramer, Handbook of Pulsar Astronomy
         dang = (dispersion_delay_constant * dm * fcoh *
                 (1./_fref-1./fcoh)**2) * u.cycle
-        with u.set_enabled_equivalencies(u.dimensionless_angles()):
-            dd_coh = np.exp(dang * 1j).conj().astype(np.complex64)
-
         # add dimension for polarisation
-        dd_coh = dd_coh[..., np.newaxis]
+        dang = dang[..., np.newaxis]
+        with u.set_enabled_equivalencies(u.dimensionless_angles()):
+            if hasattr(fh, 'cable_delays'):
+                # Add phase offset corresponding to physical delay in seconds.
+                dang = dang - (u.Quantity(fh.cable_delays) *
+                               ((fcoh-fref)[:, np.newaxis]) * u.cycle)
+            dd_coh = np.exp(dang * 1j).conj().astype(np.complex64)
 
     # Calculate the part of the whole file this node should handle.
     size_per_node = (nt-1)//mpi_size + 1
@@ -424,7 +427,6 @@ class Folder(dict):
         self['fedge_at_top'] = fh.fedge_at_top
         self['nchan'] = fh['SUBINT'].header['NCHAN']
         self['ngate'] = fh['SUBINT'].header['NBIN_PRD']
-
         # update arguments with passed kwargs
         for k in kwargs:
             if k in fold_argnames:
