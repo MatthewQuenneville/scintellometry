@@ -20,7 +20,7 @@ from astropy.extern.configobj import configobj
 from astropy.utils.compat.odict import OrderedDict
 
 from scintellometry import io
-
+from scintellometry.phasing.GMRTNaming import getNode,getVolt
 
 __all__ = ['obsdata']
 
@@ -61,13 +61,14 @@ def gmrt_rawfiles(file_fmt, fnbase, **kwargs):
     return a 2-tuple for GMRT observation 'key':
     (timestamp file, [file1, ...])
 
-    Number of files depends on whether there is a ``nodes`` keyword argument
+    Number of files depends on whether there is a ``feeds`` keyword argument
     """
-    nodes = kwargs.get('nodes', None)
-    if nodes is None:
+    feeds = kwargs.get('feeds', None)
+    if feeds is None:
         files = [file_fmt.format(fnbase)]
     else:
-        files = [file_fmt.format(fnbase, node) for node in nodes]
+        files = [file_fmt.format(fnbase, getVolt(feed), getNode(feed)) 
+                 for feed in feeds]
     timestamps = files[0] + '.timestamp'
     return (timestamps, files)
 
@@ -161,7 +162,7 @@ class Observation(dict):
         for k, v in val.iteritems():
             if k == 'ppol' and v.startswith('Polynomial'):
                 self[k] = eval(v)
-            elif k in ('P', 'S', 'channels', 'nodes'):
+            elif k in ('P', 'S', 'channels'):
                 if isinstance(v, list):
                     self[k] = [int(_v) for _v in v]
                 else:
@@ -247,7 +248,7 @@ def parse_telescope(name, vals):
             tel['observations'].append(key)
             val = Observation(date, val)
         except ValueError:
-            if key in ('P', 'S', 'channels', 'nodes'):
+            if key in ('P', 'S', 'channels'):
                 if isinstance(val, list):
                     val = [int(_v) for _v in val]
                 else:
@@ -290,7 +291,7 @@ def parse_pulsars(psrs):
 
 def parse_setup(setup):
     for k, v in setup.iteritems():
-        if k in ('P', 'S', 'channels', 'nodes'):
+        if k in ('P', 'S', 'channels'):
             if isinstance(v, list):
                 setup[k] = [int(_v) for _v in v]
             else:
