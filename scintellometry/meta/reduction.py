@@ -113,8 +113,12 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
 
     print("Rank {0} exited with statement".format(comm.rank))
 
-    savepref = "{0}{1}VoltageDump_{2}chan{3}ntbin".format(telescope, psr, 
-                                                          nchan, ntbin)
+    if 'feeds' in obs[telescope][obskey].keys():
+        feeds=''.join(obs[telescope][obskey]['feeds'])
+    else:
+        feeds=''
+    savepref = "{0}{1}{2}VoltageDump_{3}chan{4}ntbin".format(telescope, feeds,
+                                                             psr, nchan, ntbin)
     if do_waterfall:
         waterfall = np.zeros_like(mywaterfall)
         comm.Reduce(mywaterfall, waterfall, op=MPI.SUM, root=0)
