@@ -16,7 +16,8 @@ from mpi4py import MPI
 
 def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
            rfi_filter_raw=None, fref=None, dedisperse=None,
-           do_waterfall=True, do_foldspec=True, verbose=True):
+           do_waterfall=True, do_foldspec=True, verbose=True,
+           obsconf='observations.conf'):
 
     comm = MPI.COMM_WORLD
     if dedisperse == 'None':
@@ -30,7 +31,7 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
     if dedisperse is not None and fref is None:
         raise ValueError("Need to give reference frequency to dedisperse to")
 
-    obs = obsdata()
+    obs = obsdata(obsconf)
     if verbose > 3 and comm.rank == 0:
         print(obs)
     # find nearest observation to 'date',
@@ -234,6 +235,9 @@ def CL_parser():
     d_parser.add_argument(
         '--rfi_filter_raw', action='store_true',
         help="Apply the 'rfi_filter_rwa' routine to the raw data.")
+    d_parser.add_argument(
+        '-obs', '--observations', type=str, default='observations.conf',
+        help="Observations configuration file to use.")
 
     f_parser = parser.add_argument_group("folding related parameters")
     f_parser.add_argument(
