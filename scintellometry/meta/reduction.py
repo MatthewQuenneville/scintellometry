@@ -112,7 +112,8 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
 
     print("Rank {0} exited with statement".format(comm.rank))
 
-    savepref = "{0}{1}_{2}chan{3}ntbin".format(telescope, psr, nchan, ntbin)
+    savepref = "{0}{1}VoltageDump_{2}chan{3}ntbin".format(telescope, psr, 
+                                                          nchan, ntbin)
     if do_waterfall:
         waterfall = np.zeros_like(mywaterfall)
         comm.Reduce(mywaterfall, waterfall, op=MPI.SUM, root=0)

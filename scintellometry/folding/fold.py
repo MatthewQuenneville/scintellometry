@@ -109,7 +109,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
     # initialize folded spectrum and waterfall
     # TODO: use estimated number of points to set dtype
     if do_foldspec:
-        foldspec = np.zeros((ntbin, nchan, ngate, npol**2), dtype=np.float32)
+        foldspec = np.zeros((ntbin, nchan, ngate, npol*2), dtype=np.float32)
         icount = np.zeros((ntbin, nchan, ngate), dtype=np.int32)
     else:
         foldspec = None
@@ -117,7 +117,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
 
     if do_waterfall:
         nwsize = nt*ntint//ntw//oversample
-        waterfall = np.zeros((nwsize, nchan, npol**2), dtype=np.float64)
+        waterfall = np.zeros((nwsize, nchan, npol*2), dtype=np.float64)
     else:
         waterfall = None
 
@@ -318,15 +318,17 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                 print("... dedispersed", end="")
 
         if npol == 1:
-            power = vals.real**2 + vals.imag**2
+            power = np.empty(vals.shape[:-1] + (2,), np.float32)
+            power[...,0] = vals.real[...,0]
+            power[...,1] = vals.imag[...,0]
         else:
             p0 = vals[..., 0]
             p1 = vals[..., 1]
             power = np.empty(vals.shape[:-1] + (4,), np.float32)
-            power[..., 0] = p0.real**2 + p0.imag**2
-            power[..., 1] = p0.real*p1.real + p0.imag*p1.imag
-            power[..., 2] = p0.imag*p1.real - p0.real*p1.imag
-            power[..., 3] = p1.real**2 + p1.imag**2
+            power[..., 0] = p0.real
+            power[..., 1] = p0.imag
+            power[..., 2] = p1.real
+            power[..., 3] = p1.imag
 
         if verbose >= 2:
             print("... power", end="")
@@ -376,7 +378,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                 iph = iphase[:, (0 if iphase.shape[1] == 1
                                  else kfreq // oversample)]
                 # sum and count samples by phase bin
-                for ipow in range(npol**2):
+                for ipow in range(npol*2):
                     foldspec[ibin, k, :, ipow] += np.bincount(
                         iph, power[:, kfreq, ipow], ngate)
                 icount[ibin, k, :] += np.bincount(
@@ -392,13 +394,13 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
     #if verbose >= 2 or verbose and mpi_rank == 0:
     #    print('#{:4d}/{:4d} read {:6d} out of {:6d}'
     #          .format(mpi_rank, mpi_size, j+1, nt))
-
+    """
     if npol == 1:
         if do_foldspec:
             foldspec = foldspec.reshape(foldspec.shape[:-1])
         if do_waterfall:
             waterfall = waterfall.reshape(waterfall.shape[:-1])
-
+    """
     return foldspec, icount, waterfall
 
 
