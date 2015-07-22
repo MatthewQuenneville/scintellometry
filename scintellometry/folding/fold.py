@@ -358,7 +358,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                 iwk = np.clip(iwk, 0, nwsize-1, out=iwk)
                 iwkmin = iwk.min()
                 iwkmax = iwk.max()+1
-                for ipow in range(npol**2):
+                for ipow in range(npol*2):
                     waterfall[iwkmin:iwkmax, k, ipow] += np.bincount(
                         iwk-iwkmin, power[:, kfreq, ipow], iwkmax-iwkmin)
             if verbose >= 2:

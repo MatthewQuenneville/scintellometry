@@ -12,12 +12,12 @@ from scintellometry.folding.pmap import pmap
 from .observations import obsdata
 
 from mpi4py import MPI
-
+import os
 
 def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
            rfi_filter_raw=None, fref=None, dedisperse=None,
            do_waterfall=True, do_foldspec=True, verbose=True,
-           obsconf='observations.conf'):
+           obsconf='observations.conf',outdir=''):
 
     comm = MPI.COMM_WORLD
     if dedisperse == 'None':
@@ -110,7 +110,6 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
                         rfi_filter_power=None)
         myfoldspec, myicount, mywaterfall = folder(fh, comm=comm)
     # end with
-
     print("Rank {0} exited with statement".format(comm.rank))
 
     if 'feeds' in obs[telescope][obskey].keys():
@@ -124,8 +123,9 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
         comm.Reduce(mywaterfall, waterfall, op=MPI.SUM, root=0)
         if comm.rank == 0:
             # waterfall = normalize_counts(waterfall)
-            np.save("{0}waterfall_{1}+{2:08}sec.npy"
-                    .format(savepref, tstart.isot, dt.sec), waterfall)
+            outfile="{0}waterfall_{1}+{2:08}sec.npy".format(savepref, 
+                                                            tstart.isot, dt.sec)
+            np.save(os.path.join(outdir,outfile), waterfall)
 
     if do_foldspec:
         foldspec = np.zeros_like(myfoldspec) if comm.rank == 0 else None
@@ -137,9 +137,11 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
         del myicount  # save memory on node 0
         if comm.rank == 0:
             fname = ("{0}foldspec_{1}+{2:08}sec.npy")
-            np.save(fname.format(savepref, tstart.isot, dt.sec), foldspec)
+            outfile_foldspec=fname.format(savepref, tstart.isot, dt.sec)
+            np.save(os.path.join(outdir,outfile_foldspec), foldspec)
             iname = ("{0}icount_{1}+{2:08}sec.npy")
-            np.save(iname.format(savepref, tstart.isot, dt.sec), icount)
+            outfile_icount=iname.format(savepref, tstart.isot, dt.sec)
+            np.save(os.path.join(outdir,outfile_icount), icount)
 
     if comm.rank == 0:
         if do_foldspec and foldspec.ndim == 3:
@@ -242,6 +244,9 @@ def CL_parser():
     d_parser.add_argument(
         '-obs', '--observations', type=str, default='observations.conf',
         help="Observations configuration file to use.")
+    d_parser.add_argument(
+        '-out', '--outDirectory', type=str, default='',
+        help="Directory in which to output files.")
 
     f_parser = parser.add_argument_group("folding related parameters")
     f_parser.add_argument(
