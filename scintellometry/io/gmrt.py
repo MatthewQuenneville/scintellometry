@@ -98,12 +98,12 @@ class GMRTRawDumpData(GMRTBase):
             self.cable_delays = []
             for sample_offset in sample_offsets:
                 if not hasattr(sample_offset, 'unit'):
-                    sample_offset = self.tell(sample_offset, u.s)
+                    sample_offset = self.tell(sample_offset, u.s).value
 
-                one_byte = self.tell(1, u.s)
+                one_byte = self.tell(1, u.s).value
                 offset, delay = divmod(sample_offset, one_byte)
                 self.sample_offsets.append(int(offset))
-                self.cable_delays.append(delay)
+                self.cable_delays.append(delay * u.s)
 
     def _seek(self, offset):
         if offset % self.recordsize != 0:
