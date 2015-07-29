@@ -20,7 +20,6 @@ from astropy.extern.configobj import configobj
 from astropy.utils.compat.odict import OrderedDict
 
 from scintellometry import io
-from scintellometry.phasing.GMRTNaming import getNode,getVolt
 
 __all__ = ['obsdata']
 
@@ -63,15 +62,24 @@ def gmrt_rawfiles(file_fmt, fnbase, **kwargs):
 
     Number of files depends on whether there is a ``feeds`` keyword argument
     """
+    from scintellometry.phasing.GMRTNaming import getNode,getVolt
+    
     feeds = kwargs.get('feeds', None)
+
+    # Find raw_voltage and node numbers for given GMRT feeds
+    nodes = [getNode(feed) for feed in feeds]
+    raw_voltages = [getVolt(feed) for feed in feeds]
+
+    if None in nodes or None in raw_voltages:
+        raise Exception("GMRT dish name not recognized!")
+
     if feeds is None:
         files = [file_fmt.format(fnbase)]
     else:
-        files = [file_fmt.format(fnbase, getVolt(feed), getNode(feed)) 
-                 for feed in feeds]
+        files = [file_fmt.format(fnbase, raw_voltage, node) 
+                 for raw_voltage,node in zip(raw_voltages,nodes)]
     timestamps = files[0] + '.timestamp'
     return (timestamps, files)
-
 
 def gmrt_twofiles(file_fmt, fnbase, pol, **kwargs):
     """"
