@@ -62,22 +62,23 @@ def gmrt_rawfiles(file_fmt, fnbase, **kwargs):
 
     Number of files depends on whether there is a ``feeds`` keyword argument
     """
-    from scintellometry.phasing.GMRTNaming import getNode,getVolt
     
-    feeds = kwargs.get('feeds', None)
-
-    # Find raw_voltage and node numbers for given GMRT feeds
-    nodes = [getNode(feed) for feed in feeds]
-    raw_voltages = [getVolt(feed) for feed in feeds]
-
-    if None in nodes or None in raw_voltages:
-        raise Exception("GMRT dish name not recognized!")
+    feeds = kwargs.get('feeds', None)  
 
     if feeds is None:
         files = [file_fmt.format(fnbase)]
     else:
+        from scintellometry.io.gmrt import nodes_and_voltages
+
+        try:
+            n_and_v = [nodes_and_voltages[feed] for feed in feeds]
+        except KeyError:
+            raise KeyError("One or more of feeds '{0}' are not recognized as"
+                           " GMRT feeds".format(feeds)) 
+
         files = [file_fmt.format(fnbase, raw_voltage, node) 
-                 for raw_voltage,node in zip(raw_voltages,nodes)]
+                 for node,raw_voltage in n_and_v]
+
     timestamps = files[0] + '.timestamp'
     return (timestamps, files)
 
