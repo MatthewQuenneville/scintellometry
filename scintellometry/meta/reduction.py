@@ -12,11 +12,12 @@ from scintellometry.folding.pmap import pmap
 from .observations import obsdata
 
 from mpi4py import MPI
-
+import os
 
 def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
            rfi_filter_raw=None, fref=None, dedisperse=None,
-           do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True):
+           do_waterfall=True, do_foldspec=True, do_voltage=True, 
+           obs_conf='observations.conf', output_dir='', verbose=True):
 
     comm = MPI.COMM_WORLD
     if dedisperse == 'None':
@@ -30,7 +31,10 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
     if dedisperse is not None and fref is None:
         raise ValueError("Need to give reference frequency to dedisperse to")
 
-    obs = obsdata()
+    if not os.path.isfile(obs_conf):
+        raise IOError("Observations configuration file not found: "+obs_conf)
+
+    obs = obsdata(obs_conf)
     if verbose > 3 and comm.rank == 0:
         print(obs)
     # find nearest observation to 'date',
@@ -112,7 +116,19 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
 
     print("Rank {0} exited with statement".format(comm.rank))
 
-    savepref = "{0}{1}_{2}chan{3}ntbin".format(telescope, psr, nchan, ntbin)
+    try:
+        dishes=obs[telescope][obskey]['feeds']
+    except KeyError:
+        dishes=[]
+    dishstring=''.join(dishes)
+    savepref = "{0}{1}{2}_{3}chan{4}ntbin".format(telescope, dishstring, 
+                                                  psr, nchan, ntbin)
+
+    if not(os.path.isdir(output_dir) or output_dir==''):
+        raise IOError("Output directory not found: "+outputdir)
+    else:
+        savepref=os.path.join(output_dir,savepref)
+
     if do_waterfall:
         waterfall = np.zeros_like(mywaterfall)
         comm.Reduce(mywaterfall, waterfall, op=MPI.SUM, root=0)
@@ -240,6 +256,10 @@ def CL_parser():
     d_parser.add_argument(
         '--rfi_filter_raw', action='store_true',
         help="Apply the 'rfi_filter_rwa' routine to the raw data.")
+    d_parser.add_argument(
+        '-obs', '--obs_conf', type=str, default='observations.conf',
+        help="Observations configuration file to use. Defaults to "
+        "'observations.conf'.")
 
     f_parser = parser.add_argument_group("folding related parameters")
     f_parser.add_argument(
@@ -274,6 +294,10 @@ def CL_parser():
     d_parser.add_argument(
         '--fref', type=float, default=None,
         help="reference frequency for dispersion measure")
+
+    parser.add_argument(
+        '-out', '--output_dir', type=str, default='',
+        help="Directory in which to produce output files")
 
     parser.add_argument('-v', '--verbose', action='append_const', const=1)
     return parser.parse_args()

@@ -49,4 +49,5 @@ if __name__ == '__main__':
         ntw_min=args.ntw_min, rfi_filter_raw=args.rfi_filter_raw,
         do_waterfall=args.waterfall, do_foldspec=args.foldspec, 
         do_voltage=args.voltage, dedisperse=args.dedisperse, 
-        fref=args.fref, verbose=args.verbose)
+        fref=args.fref, verbose=args.verbose, obs_conf=args.obs_conf,
+        output_dir=args.output_dir)
