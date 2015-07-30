@@ -27,7 +27,7 @@ dispersion_delay_constant = 4149. * u.s * u.MHz**2 * u.cm**3 / u.pc
 def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
          nt, ntint, ngate, ntbin, ntw, dm, fref, phasepol,
          dedisperse='incoherent',
-         do_waterfall=True, do_foldspec=True, verbose=True,
+         do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True,
          progress_interval=100, rfi_filter_raw=None, rfi_filter_power=None,
          return_fits=False):
     """
@@ -71,8 +71,9 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
     dedisperse : None or string (default: incoherent).
         None, 'incoherent', 'coherent', 'by-channel'.
         Note: None really does nothing
-    do_waterfall, do_foldspec : bool
-        whether to construct waterfall, folded spectrum (default: True)
+    do_waterfall, do_foldspec, do_voltage : bool
+        whether to construct waterfall, folded spectrum, complex voltage 
+        waterfall (default: True)
     verbose : bool or int
         whether to give some progress information (default: True)
     progress_interval : int
@@ -120,6 +121,12 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
         waterfall = np.zeros((nwsize, nchan, npol**2), dtype=np.float64)
     else:
         waterfall = None
+
+    if do_voltage:
+        nwsize = nt*ntint//ntw//oversample
+        voltage = np.zeros((nwsize, nchan, npol), dtype=np.complex128)
+    else:
+        voltage = None
 
     if verbose and mpi_rank == 0:
         print('Reading from {}'.format(fh))
@@ -362,6 +369,24 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
             if verbose >= 2:
                 print("... waterfall", end="")
 
+        if do_voltage:
+
+            iw = np.round((tsr / dtsample / oversample).to(1)
+                          .value / ntw).astype(int)
+            for k, kfreq in enumerate(ifreq):  # sort in frequency while at it
+                iwk = iw[:, (0 if iw.shape[1] == 1 else kfreq // oversample)]
+                iwk = np.clip(iwk, 0, nwsize-1, out=iwk)
+                iwkmin = iwk.min()
+                iwkmax = iwk.max()+1
+                for ivolt in range(npol):
+                    voltage[iwkmin:iwkmax, k, ivolt] += np.bincount(
+                        iwk-iwkmin, vals[:, kfreq, ivolt].real, iwkmax-iwkmin)
+                    voltage[iwkmin:iwkmax, k, ivolt] += 1J*np.bincount(
+                        iwk-iwkmin, vals[:, kfreq, ivolt].imag, iwkmax-iwkmin)
+
+            if verbose >= 2:
+                print("... voltage", end="")
+
         if do_foldspec:
             ibin = (j*ntbin) // nt  # bin in the time series: 0..ntbin-1
 
@@ -398,8 +423,10 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
             foldspec = foldspec.reshape(foldspec.shape[:-1])
         if do_waterfall:
             waterfall = waterfall.reshape(waterfall.shape[:-1])
+        if do_voltage:
+            voltage = voltage.reshape(voltage.shape[:-1])
 
-    return foldspec, icount, waterfall
+    return foldspec, icount, waterfall, voltage
 
 
 class Folder(dict):

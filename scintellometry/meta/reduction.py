@@ -16,7 +16,7 @@ from mpi4py import MPI
 
 def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
            rfi_filter_raw=None, fref=None, dedisperse=None,
-           do_waterfall=True, do_foldspec=True, verbose=True):
+           do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True):
 
     comm = MPI.COMM_WORLD
     if dedisperse == 'None':
@@ -107,7 +107,7 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
                         verbose=verbose, progress_interval=1,
                         rfi_filter_raw=rfi_filter_raw,
                         rfi_filter_power=None)
-        myfoldspec, myicount, mywaterfall = folder(fh, comm=comm)
+        myfoldspec, myicount, mywaterfall, myvoltage = folder(fh, comm=comm)
     # end with
 
     print("Rank {0} exited with statement".format(comm.rank))
@@ -120,6 +120,13 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
             # waterfall = normalize_counts(waterfall)
             np.save("{0}waterfall_{1}+{2:08}sec.npy"
                     .format(savepref, tstart.isot, dt.sec), waterfall)
+            
+    if do_voltage:
+        voltage = np.zeros_like(myvoltage)
+        comm.Reduce(myvoltage, voltage, op=MPI.SUM, root=0)
+        if comm.rank == 0:
+            np.save("{0}voltage_{1}+{2:08}sec.npy"
+                    .format(savepref, tstart.isot, dt.sec), voltage)
 
     if do_foldspec:
         foldspec = np.zeros_like(myfoldspec) if comm.rank == 0 else None
@@ -252,6 +259,9 @@ def CL_parser():
     w_parser.add_argument(
         '-w','--waterfall', type=bool, default=False,
         help="Produce a waterfall plot")
+    w_parser.add_argument(
+        '-volt','--voltage', type=bool, default=False,
+        help="Produce a complex voltage waterfall plot")
     w_parser.add_argument(
         '-nwm', '--ntw_min', type=int, default=10200,
         help="number of samples to combine for waterfall")
