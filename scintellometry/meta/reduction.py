@@ -104,8 +104,8 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
                         ntbin=ntbin, ntw=ntw, dm=dm, fref=fref,
                         phasepol=phasepol, dedisperse=dedisperse,
                         do_waterfall=do_waterfall, do_foldspec=do_foldspec,
-                        verbose=verbose, progress_interval=1,
-                        rfi_filter_raw=rfi_filter_raw,
+                        do_voltage=do_voltage, verbose=verbose, 
+                        progress_interval=1,rfi_filter_raw=rfi_filter_raw,
                         rfi_filter_power=None)
         myfoldspec, myicount, mywaterfall, myvoltage = folder(fh, comm=comm)
     # end with

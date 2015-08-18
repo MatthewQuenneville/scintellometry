@@ -71,7 +71,10 @@ def gmrt_rawfiles(file_fmt, fnbase, **kwargs):
         from scintellometry.io.gmrt import nodes_and_voltages
 
         try:
-            n_and_v = [nodes_and_voltages[feed] for feed in feeds]
+            if isinstance(feeds,list):
+                n_and_v = [nodes_and_voltages[feed] for feed in feeds]
+            else:
+                n_and_v = [nodes_and_voltages[feeds]]
         except KeyError:
             raise KeyError("One or more of feeds '{0}' are not recognized as"
                            " GMRT feeds".format(feeds)) 
