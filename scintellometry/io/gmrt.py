@@ -93,7 +93,7 @@ class GMRTRawDumpData(GMRTBase):
         super(GMRTRawDumpData, self).__init__(raw_files, blocksize, nchan,
                                               samplerate, fedge, fedge_at_top,
                                               dtype, comm)
-        from scintellometry.phasing.fringeStopClass import FringeStopper
+        from scintellometry.phasing.fringeStop import FringeStopper
         self.fringe_stop = FringeStopper(Time('2015-04-27T15:01:45.360721848', format='isot', scale='utc'))
         self.update_delays(self.time0)
         """
