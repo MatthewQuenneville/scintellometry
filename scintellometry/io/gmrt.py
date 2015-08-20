@@ -94,7 +94,7 @@ class GMRTRawDumpData(GMRTBase):
                                               samplerate, fedge, fedge_at_top,
                                               dtype, comm)
         from scintellometry.phasing.fringeStopClass import FringeStopper
-        self.fringe_stop = FringeStopper(Time(57139.6262222566, format='mjd'))
+        self.fringe_stop = FringeStopper(Time('2015-04-27T15:01:45.360721848', format='isot', scale='utc'))
         self.update_delays(self.time0)
         """
         print(self.sample_offsets)
@@ -120,7 +120,7 @@ class GMRTRawDumpData(GMRTBase):
          
     def update_delays(self, time):
         delays_and_phases=self.fringe_stop.get_delay_and_phase(time, self.feeds)
-        self.sample_offsets = [int(delays_and_phases[feed[:-1]][0].value) 
+        self.sample_offsets = [int(round(delays_and_phases[feed[:-1]][0].value))
                                for feed in self.feeds]
         self.phases = [delays_and_phases[feed[:-1]][1] for feed in self.feeds]
 
@@ -184,7 +184,7 @@ class GMRTRawDumpData(GMRTBase):
             # fromfile decodes each byte into 2 samples and thus the decoded
             # output has shape (size, npol, 2).  We need to get npol as the
             # last dimension.
-            return out.reshape(-1, 2, 2).transpose(0, 2, 1).flatten().view(
+            return out.reshape(-1, self.npol, 2).transpose(0, 2, 1).flatten().view(
                 '{0},{0}'.format(out.dtype.str))
 
 

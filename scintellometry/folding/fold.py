@@ -209,6 +209,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                 (1./_fref-1./fcoh)**2) * u.cycle
         # add dimension for polarisation
         dang = dang[..., np.newaxis]
+
         with u.set_enabled_equivalencies(u.dimensionless_angles()):
             if hasattr(fh, 'cable_delays'):
                 # Add phase offset corresponding to physical delay in seconds.
@@ -231,7 +232,8 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
 
         # Just in case numbers were set wrong -- break if file ends;
         # better keep at least the work done.
-        fh.update_delays(tstart+dtsample*j*ntint+fh.time0)
+        fh.update_delays(tstart+dtsample*(j+0.5)*ntint+fh.time0)
+
         try:
             raw = fh.seek_record_read(int((nskip+j)*fh.blocksize),
                                       fh.blocksize)
@@ -338,12 +340,10 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
 
         if phase_data:
             phase_mat=np.exp(1J*np.array([phase.value for phase in fh.phases]))
-            print(fh.sample_offsets)
-            print(vals.shape)
+
             vals=vals*phase_mat
-            print(vals.shape)
+
             vals=vals.sum(-1,keepdims=True)
-            print(vals.shape)
 
         if npol == 1:
             power = vals.real**2 + vals.imag**2
