@@ -12,6 +12,7 @@ import numpy as np
 from scipy.fftpack import fftfreq, fftshift
 from astropy.time import Time, TimeDelta
 import astropy.units as u
+from astropy.coordinates import Angle
 
 from . import MultiFile, header_defaults
 from .fromfile import fromfile
@@ -75,7 +76,7 @@ class GMRTRawDumpData(GMRTBase):
     def __init__(self, timestamp_file, raw_files, blocksize, nchan=1,
                  samplerate=(200./6.)*u.MHz, fedge=None, fedge_at_top=None,
                  sample_offsets=None, dtype='4bit', utc_offset=5.5*u.hr,
-                 comm=None):
+                 comm=None, feeds=None):
         """GMRT raw dump data stored in blocks holding 0.251 s worth of data,
         in a single streams.  For 16MHz BW, each block is 4 MiB w/ 8Mi 4-bit
         baseband samples.
@@ -86,24 +87,42 @@ class GMRTRawDumpData(GMRTBase):
         self.time0 = self.timestamps[0]
         self.nchan = 1
         self.npol = len(raw_files)
+        self.feeds = feeds if isinstance(feeds,list) else [feeds]
         # GMRT time is off by one 32MB record ---- remove for now
         # self.time0 -= (2.**25/samplerate).to(u.s)
         super(GMRTRawDumpData, self).__init__(raw_files, blocksize, nchan,
                                               samplerate, fedge, fedge_at_top,
                                               dtype, comm)
+        from scintellometry.phasing.fringeStopClass import FringeStopper
+        self.fringe_stop = FringeStopper(Time(57139.6262222566, format='mjd'))
+        self.update_delays(self.time0)
+        """
+        print(self.sample_offsets)
         if sample_offsets is None:
             self.sample_offsets = (0,) * len(raw_files)
         else:
             self.sample_offsets = []
             self.cable_delays = []
+            print(self.sample_offsets)
             for sample_offset in sample_offsets:
                 if not hasattr(sample_offset, 'unit'):
                     sample_offset = self.tell(sample_offset, u.s).value
 
                 one_byte = self.tell(1, u.s).value
                 offset, delay = divmod(sample_offset, one_byte)
+                print offset, delay
                 self.sample_offsets.append(int(offset))
                 self.cable_delays.append(delay * u.s)
+            self.cable_delays=[0.0*u.s,6e-8*u.s]
+            self.sample_offsets=[0,77]
+            print(self.sample_offsets)
+            """
+         
+    def update_delays(self, time):
+        delays_and_phases=self.fringe_stop.get_delay_and_phase(time, self.feeds)
+        self.sample_offsets = [int(delays_and_phases[feed[:-1]][0].value) 
+                               for feed in self.feeds]
+        self.phases = [delays_and_phases[feed[:-1]][1] for feed in self.feeds]
 
     def _seek(self, offset):
         if offset % self.recordsize != 0:

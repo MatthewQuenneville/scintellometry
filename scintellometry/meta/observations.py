@@ -164,6 +164,7 @@ class Telescope(OrderedDict):
         file_setup = {'key': key}
         file_setup.update(self)
         file_setup.update(self[key])
+        setup.update({'feeds': file_setup['feeds']})
         files = FILE_LIST_PICKERS[data_format](**file_setup)
         return DATA_READERS[data_format](*files, comm=comm, **setup)
 

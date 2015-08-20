@@ -29,7 +29,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
          dedisperse='incoherent',
          do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True,
          progress_interval=100, rfi_filter_raw=None, rfi_filter_power=None,
-         return_fits=False):
+         return_fits=False, phase_data=False):
     """
     FFT data, fold by phase/time and make a waterfall series
 
@@ -80,7 +80,9 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
         Ping every progress_interval sets
     return_fits : bool (default: False)
         return a subint fits table for rank == 0 (None otherwise)
-
+    phase_data : bool (default: False)
+        treat input files as individual dishes, to be phased (instead of 
+        polarizations)
     """
     assert dedisperse in (None, 'incoherent', 'by-channel', 'coherent')
     need_fine_channels = dedisperse in ['by-channel', 'coherent']
@@ -102,7 +104,13 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
         mpi_rank = comm.rank
         mpi_size = comm.size
 
-    npol = getattr(fh, 'npol', 1)
+    if phase_data:
+        npol=1
+        nfeed=getattr(fh, 'npol', 1)
+    else:
+        npol = getattr(fh, 'npol', 1)
+        nfeed = 1
+    
     assert npol == 1 or npol == 2
     if verbose > 1 and mpi_rank == 0:
         print("Number of polarisations={}".format(npol))
@@ -212,6 +220,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
     size_per_node = (nt-1)//mpi_size + 1
     start_block = mpi_rank*size_per_node
     end_block = min((mpi_rank+1)*size_per_node, nt)
+
     for j in range(start_block, end_block):
         if verbose and j % progress_interval == 0:
             print('#{:4d}/{:4d} is doing {:6d}/{:6d} [={:6d}/{:6d}]; '
@@ -222,6 +231,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
 
         # Just in case numbers were set wrong -- break if file ends;
         # better keep at least the work done.
+        fh.update_delays(tstart+dtsample*j*ntint+fh.time0)
         try:
             raw = fh.seek_record_read(int((nskip+j)*fh.blocksize),
                                       fh.blocksize)
@@ -232,13 +242,15 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
             print("#{:4d}/{:4d} read {} items"
                   .format(mpi_rank, mpi_size, raw.size), end="")
 
-        if npol == 2:  # multiple polarisations
+        if npol*nfeed > 1:  # multiple polarisations
             raw = raw.view(raw.dtype.fields.values()[0][0])
-
-        if fh.nchan == 1:  # raw.shape=(ntint*npol)
-            raw = raw.reshape(-1, npol)
-        else:              # raw.shape=(ntint, nchan*npol)
-            raw = raw.reshape(-1, fh.nchan, npol)
+        if phase_data:
+            raw = raw.reshape(-1,nfeed)
+        else:
+            if fh.nchan == 1:  # raw.shape=(ntint*npol)
+                raw = raw.reshape(-1, npol)
+            else:              # raw.shape=(ntint, nchan*npol)
+                raw = raw.reshape(-1, fh.nchan, npol)
 
         if rfi_filter_raw is not None:
             raw, ok = rfi_filter_raw(raw)
@@ -258,11 +270,11 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
             # otherwise to output channels
             if raw.dtype.kind == 'c':
                 ftchan = len(vals) if dedisperse == 'coherent' else nchan
-                vals = fft(vals.reshape(-1, ftchan, npol), axis=1,
+                vals = fft(vals.reshape(-1, ftchan, npol*nfeed), axis=1,
                            overwrite_x=True, **_fftargs)
             else:  # real data
                 ftchan = len(vals) // 2 if dedisperse == 'coherent' else nchan
-                vals = rfft(vals.reshape(-1, ftchan*2, npol), axis=1,
+                vals = rfft(vals.reshape(-1, ftchan*2, npol*nfeed), axis=1,
                             overwrite_x=True, **_fftargs)
                 if vals.dtype.kind == 'f':  # this depends on version, sigh.
                     # rfft: Re[0], Re[1], Im[1],.,Re[n/2-1], Im[n/2-1], Re[n/2]
@@ -270,17 +282,17 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                     # Re[0], Re[n], Re[1], Im[1], .... (channel 0 junk anyway)
                     vals = (np.hstack((vals[:, :1], vals[:, -1:],
                                        vals[:, 1:-1]))
-                            .reshape(-1, ftchan, 2 * npol))
+                            .reshape(-1, ftchan, 2 * npol*nfeed))
                     if npol == 2:  # reorder pol & real/imag
                         vals1 = vals[:, :, 1]
                         vals[:, :, 1] = vals[:, :, 2]
                         vals[:, :, 2] = vals1
-                        vals = vals.reshape(-1, ftchan, npol, 2)
+                        vals = vals.reshape(-1, ftchan, npol*nfeed, 2)
                 else:
                     vals[:, 0] = vals[:, 0].real + 1j * vals[:, -1].real
                     vals = vals[:, :-1]
 
-                vals = vals.view(np.complex64).reshape(-1, ftchan, npol)
+                vals = vals.view(np.complex64).reshape(-1, ftchan, npol*nfeed)
 
             # for incoherent,            vals.shape=(ntint, nchan, npol)
             # for others, (1, ntint*nchan, npol) -> (ntint*nchan, 1, npol)
@@ -288,7 +300,7 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
                 if dedisperse == 'by-channel':
                     fine = fft(vals, axis=0, overwrite_x=True, **_fftargs)
                 else:
-                    fine = vals.reshape(-1, 1, npol)
+                    fine = vals.reshape(-1, 1, npol*nfeed)
 
         else:  # data already channelized
             if need_fine_channels:
@@ -313,16 +325,25 @@ def fold(fh, comm, samplerate, fedge, fedge_at_top, nchan,
 
             if dedisperse == 'coherent' and nchan > 1 and fh.nchan == 1:
                 # final FT to get requested channels
-                vals = vals.reshape(-1, nchan, npol)
+                vals = vals.reshape(-1, nchan, npol*nfeed)
                 vals = fft(vals, axis=1, overwrite_x=True, **_fftargs)
             elif dedisperse == 'by-channel' and oversample > 1:
-                vals = vals.reshape(-1, oversample, fh.nchan, npol)
+                vals = vals.reshape(-1, oversample, fh.nchan, npol*nfeed)
                 vals = fft(vals, axis=1, overwrite_x=True, **_fftargs)
-                vals = vals.transpose(0, 2, 1, 3).reshape(-1, nchan, npol)
+                vals = vals.transpose(0, 2, 1, 3).reshape(-1, nchan, npol*nfeed)
 
             # vals[time, chan, pol]
             if verbose >= 2:
                 print("... dedispersed", end="")
+
+        if phase_data:
+            phase_mat=np.exp(1J*np.array([phase.value for phase in fh.phases]))
+            print(fh.sample_offsets)
+            print(vals.shape)
+            vals=vals*phase_mat
+            print(vals.shape)
+            vals=vals.sum(-1,keepdims=True)
+            print(vals.shape)
 
         if npol == 1:
             power = vals.real**2 + vals.imag**2

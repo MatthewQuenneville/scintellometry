@@ -16,7 +16,8 @@ from mpi4py import MPI
 
 def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
            rfi_filter_raw=None, fref=None, dedisperse=None,
-           do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True):
+           do_waterfall=True, do_foldspec=True, do_voltage=True, verbose=True,
+           phase_data=False):
 
     comm = MPI.COMM_WORLD
     if dedisperse == 'None':
@@ -106,7 +107,7 @@ def reduce(telescope, obskey, tstart, tend, nchan, ngate, ntbin, ntw_min,
                         do_waterfall=do_waterfall, do_foldspec=do_foldspec,
                         do_voltage=do_voltage, verbose=verbose, 
                         progress_interval=1,rfi_filter_raw=rfi_filter_raw,
-                        rfi_filter_power=None)
+                        rfi_filter_power=None, phase_data=phase_data)
         myfoldspec, myicount, mywaterfall, myvoltage = folder(fh, comm=comm)
     # end with
 
@@ -240,6 +241,9 @@ def CL_parser():
     d_parser.add_argument(
         '--rfi_filter_raw', action='store_true',
         help="Apply the 'rfi_filter_rwa' routine to the raw data.")
+    d_parser.add_argument(
+        '--phase_data', '-phase', type=bool, default=False,
+        help="Coherently add voltages from each dish.")
 
     f_parser = parser.add_argument_group("folding related parameters")
     f_parser.add_argument(
